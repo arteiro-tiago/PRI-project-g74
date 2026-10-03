@@ -1,0 +1,9 @@
+nvd-json-data-feeds/
+
+*.csv
+
+venv/
+
+__pycache__/
+*.pyc
+*.pyo
