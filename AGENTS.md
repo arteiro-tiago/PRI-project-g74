@@ -66,7 +66,10 @@ This repo is intended to support the first milestone pipeline for:
 Current implementation:
 
 - `NVD_extractor.py` manages the data acquisition and export pipeline.
-- It clones the NVD data feed repository, filters CVEs by year, and exports a CSV from JSON records.
+- The existing `selected_cves.csv` contains the selected NVD records.
+- It clones the GitHub Advisory Database and indexes advisories by CVE values in `aliases`.
+- It merges NVD and GHAD data and exports the enriched collection to `final_cves.csv`.
+- NVD remains the primary source for structured fields; GHAD provides `summary`, `details`, `ghsa_id`, and additional enrichment.
 
 This is the starting point for the project; future work should evolve it into a reproducible, documented data processing pipeline for the full project.
 
@@ -92,6 +95,8 @@ Each final document should represent one CVE and include a consolidated set of f
 - `exploit_related_fields`
 - `source`
 - `source_url`
+- `ghsa_id`
+- `aliases`
 
 The final document must be suitable for indexing and retrieval in a search engine.
 
@@ -164,6 +169,9 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+The pipeline also requires `git` and an internet connection because it clones
+the GitHub Advisory Database during execution.
+
 ### Run the current extraction script
 
 ```bash
@@ -174,17 +182,15 @@ python NVD_extractor.py
 
 The script currently:
 
-- clones the NVD feeds repository
-- filters CVEs by year range
-- keeps a random subset per year
-- exports a CSV from JSON records
+- reads the selected NVD collection from `selected_cves.csv`;
+- clones the GitHub Advisory Database;
+- indexes GHAD advisories by CVE aliases;
+- enriches matching NVD documents with summaries, details, references, CWE and affected packages;
+- writes the final collection to `final_cves.csv`.
 
-This provides a working baseline, but the project should evolve toward:
-
-- linked dataset enrichment
-- richer schema construction
-- filtering based on quality and relevance
-- final corpus generation for Solr indexing
+The validated run produced 3,000 NVD documents, with 2,791 enriched by GHAD
+and 209 without a matching advisory. The final corpus is intended for later
+indexing and retrieval with Solr.
 
 ---
 
