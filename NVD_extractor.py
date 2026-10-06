@@ -8,7 +8,7 @@ from pathlib import Path
 
 nPerYear = 300
 repo_name = "nvd-json-data-feeds"
-ghad_repo_name = "github-advisory-database"
+ghad_repo_name = "advisory-database"
 
 def cloneRepo():
     path = Path(repo_name)
@@ -28,15 +28,31 @@ def clone_ghad_repo():
         print("deleting existing GHAD copy")
         shutil.rmtree(path)
 
-    print("CLONE GHAD")
-    subprocess.run([
-        "git",
-        "clone",
-        "--depth",
-        "1",
-        "https://github.com/github/advisory-database.git",
-        ghad_repo_name,
-    ], check=True)
+    print("Cloning reviewed GitHub Advisory Database advisories")
+    subprocess.run(
+        [
+            "git",
+            "clone",
+            "--depth",
+            "1",
+            "--filter=blob:none",
+            "--sparse",
+            "https://github.com/github/advisory-database.git",
+            str(path),
+        ],
+        check=True,
+    )
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(path),
+            "sparse-checkout",
+            "set",
+            "advisories/github-reviewed",
+        ],
+        check=True,
+    )
 
 
 def filter_cve_data(start_year, end_year, nPerYear):
@@ -395,7 +411,7 @@ if __name__ == "__main__":
     #cloneRepo()
     #filter_cve_data(2017, 2026, nPerYear)
     #create_csv_with_pandas("selected_cves.csv")
-    clone_ghad_repo()
+    #clone_ghad_repo()
     merge_ghad_with_nvd(
         "selected_cves.csv",
         ghad_repo_name,
