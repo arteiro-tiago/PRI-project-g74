@@ -305,7 +305,6 @@ def index_ghad_advisories(ghad_path):
 
 def _merge_ghad_advisories(nvd_record, advisories):
     ghsa_ids = []
-    aliases = []
     summaries = []
     details = []
     cwes = [value.strip() for value in nvd_record.get("cwe", "").split(";")]
@@ -323,7 +322,6 @@ def _merge_ghad_advisories(nvd_record, advisories):
 
     for advisory in advisories:
         ghsa_ids.append(advisory.get("id"))
-        aliases.extend(advisory.get("aliases", []))
         summaries.append(advisory.get("summary"))
         details.append(advisory.get("details"))
         cwes.extend(_ghad_cwes(advisory))
@@ -338,7 +336,6 @@ def _merge_ghad_advisories(nvd_record, advisories):
         ghad_modified.append(advisory.get("modified"))
 
     nvd_record["ghsa_id"] = ";".join(_unique_values(ghsa_ids))
-    nvd_record["aliases"] = ";".join(_unique_values(aliases))
     nvd_record["summary"] = "\n\n".join(_unique_values(summaries))
     nvd_record["details"] = "\n\n".join(_unique_values(details))
     nvd_record["cwe"] = ";".join(_unique_values(cwes))
@@ -348,8 +345,8 @@ def _merge_ghad_advisories(nvd_record, advisories):
         ensure_ascii=False,
     )
 
-    if not nvd_record.get("description"):
-        nvd_record["description"] = nvd_record["details"] or nvd_record["summary"]
+    if nvd_record.get("details"):
+        nvd_record["description"] = nvd_record["details"]
     if not nvd_record.get("published"):
         nvd_record["published"] = next((value for value in ghad_published if value), "")
     if not nvd_record.get("modified"):
@@ -361,6 +358,8 @@ def _merge_ghad_advisories(nvd_record, advisories):
     if not nvd_record.get("cvss_severity"):
         nvd_record["cvss_severity"] = ghad_severity or ""
 
+    nvd_record.drop("details")
+
     return nvd_record
 
 
@@ -371,7 +370,7 @@ def merge_ghad_with_nvd(nvd_filename, ghad_path, output_filename):
         records = list(csv.DictReader(file))
 
     fieldnames = list(records[0].keys()) if records else []
-    for field in ["ghsa_id", "aliases", "summary", "details"]:
+    for field in ["ghsa_id", "summary", "details"]:
         if field not in fieldnames:
             fieldnames.append(field)
 
@@ -393,8 +392,8 @@ def merge_ghad_with_nvd(nvd_filename, ghad_path, output_filename):
 
 if __name__ == "__main__":
     #cloneRepo()
-    filter_cve_data(2017, 2026, nPerYear)
-    create_csv_with_pandas("selected_cves.csv")
+    #filter_cve_data(2017, 2026, nPerYear)
+    #create_csv_with_pandas("selected_cves.csv")
     #clone_ghad_repo()
     merge_ghad_with_nvd(
         "selected_cves.csv",
