@@ -1,6 +1,17 @@
 import csv
 import json
+import sys
+import pandas as pd
 from pathlib import Path
+
+# Fix: Set maximum allowed CSV field size limit
+max_int = sys.maxsize
+while True:
+    try:
+        csv.field_size_limit(max_int)
+        break
+    except OverflowError:
+        max_int = int(max_int / 10)
 
 GHAD_REPO_NAME = "github-advisory-database"
 
@@ -90,7 +101,6 @@ def index_ghad_advisories(ghad_path):
 def merge_ghad_advisories(nvd_record, advisories):
     """Enrich an NVD record dictionary with matched GHAD advisories."""
     ghsa_ids = []
-    aliases = []
     summaries = []
     details = []
     cwes = [value.strip() for value in nvd_record.get("cwe", "").split(";")]
@@ -101,14 +111,13 @@ def merge_ghad_advisories(nvd_record, advisories):
     except json.JSONDecodeError:
         affected = []
 
-    ghad_cvss = {}
+    ghad_cvss_data = {}  # Renamed from ghad_cvss to avoid shadowing the function
     ghad_severity = None
     ghad_published = []
     ghad_modified = []
 
     for advisory in advisories:
         ghsa_ids.append(advisory.get("id"))
-        aliases.extend(advisory.get("aliases", []))
         summaries.append(advisory.get("summary"))
         details.append(advisory.get("details"))
         cwes.extend(ghad_cwes(advisory))
@@ -116,14 +125,13 @@ def merge_ghad_advisories(nvd_record, advisories):
         affected.extend(ghad_affected(advisory))
 
         advisory_cvss = ghad_cvss(advisory)
-        if not ghad_cvss and advisory_cvss:
-            ghad_cvss = advisory_cvss
+        if not ghad_cvss_data and advisory_cvss:
+            ghad_cvss_data = advisory_cvss
         ghad_severity = ghad_severity or advisory.get("severity")
         ghad_published.append(advisory.get("published"))
         ghad_modified.append(advisory.get("modified"))
 
     nvd_record["ghsa_id"] = ";".join(unique_values(ghsa_ids))
-    nvd_record["aliases"] = ";".join(unique_values(aliases))
     nvd_record["summary"] = "\n\n".join(unique_values(summaries))
     nvd_record["details"] = "\n\n".join(unique_values(details))
     nvd_record["cwe"] = ";".join(unique_values(cwes))
@@ -133,21 +141,20 @@ def merge_ghad_advisories(nvd_record, advisories):
         ensure_ascii=False,
     )
 
-    if not nvd_record.get("description"):
-        nvd_record["description"] = nvd_record["details"] or nvd_record["summary"]
+    if nvd_record.get("details"):
+        nvd_record["description"] = nvd_record["details"]
     if not nvd_record.get("published"):
         nvd_record["published"] = next((value for value in ghad_published if value), "")
     if not nvd_record.get("modified"):
         nvd_record["modified"] = next((value for value in ghad_modified if value), "")
-    if not nvd_record.get("cvss_score") and ghad_cvss:
-        nvd_record["cvss_score"] = ghad_cvss.get("score")
-        nvd_record["cvss_vector"] = ghad_cvss.get("vector")
-        nvd_record["cvss_version"] = ghad_cvss.get("version")
+    if not nvd_record.get("cvss_score") and ghad_cvss_data:
+        nvd_record["cvss_score"] = ghad_cvss_data.get("score")
+        nvd_record["cvss_vector"] = ghad_cvss_data.get("vector")
+        nvd_record["cvss_version"] = ghad_cvss_data.get("version")
     if not nvd_record.get("cvss_severity"):
         nvd_record["cvss_severity"] = ghad_severity or ""
 
     return nvd_record
-
 
 def merge_ghad_with_nvd(nvd_filename, ghad_path, output_filename):
     """Combine NVD CSV records with indexed GHAD data and write output."""
@@ -172,6 +179,15 @@ def merge_ghad_with_nvd(nvd_filename, ghad_path, output_filename):
         writer = csv.DictWriter(file, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(records)
+
+    df = pd.read_csv(output_filename)
+    if "details" in df.columns:
+        df = df.drop(columns=["details"])
+        df.to_csv(output_filename, index=False, encoding="utf-8")
+    if "aliases" in df.columns:
+            df = df.drop(columns=["aliases"])
+            df.to_csv(output_filename, index=False, encoding="utf-8")
+    
 
     print(f"GHAD advisories indexed: {len(advisories_by_cve)} CVE aliases")
     print(f"NVD records enriched: {matched}/{len(records)}")
