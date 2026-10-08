@@ -393,9 +393,9 @@ def merge_ghad_with_nvd(nvd_filename, ghad_path, output_filename):
 
 if __name__ == "__main__":
     #cloneRepo()
-    #filter_cve_data(2017, 2026, nPerYear)
-    #create_csv_with_pandas("selected_cves.csv")
-    clone_ghad_repo()
+    filter_cve_data(2017, 2026, nPerYear)
+    create_csv_with_pandas("selected_cves.csv")
+    #clone_ghad_repo()
     merge_ghad_with_nvd(
         "selected_cves.csv",
         ghad_repo_name,
