@@ -3,12 +3,13 @@ import os
 import re
 from collections import Counter
 
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
 OUTPUT_DIR = "figures"
 
-# Common words we don't want to count
+# common words we don't want to count
 STOP_WORDS = {
     "a", "an", "and", "are", "as", "at", "be", "been", "being", "by",
     "can", "could", "for", "from", "has", "have", "in", "into", "is",
@@ -26,17 +27,14 @@ SEVERITY_COLORS = {
     "UNKNOWN": "#9e9e9e",
 }
 
-
 def get_words(text):
     if not isinstance(text, str):
         return []
     return re.findall(r"[a-z0-9]+(?:[._+-][a-z0-9]+)*", text.lower())
 
 
-# ----------------------------------------------------------------- analyses
 
 def missing_values(data):
-    # treats empty strings like missing values
     cleaned = data.replace(r"^\s*$", pd.NA, regex=True)
     missing = pd.DataFrame()
     missing["missing_count"] = cleaned.isna().sum()
@@ -45,7 +43,6 @@ def missing_values(data):
 
 
 def cvss_analysis(data):
-    """Summarize CVSS scores and count CVEs per severity level."""
     scores = pd.to_numeric(data["cvss_score"], errors="coerce").dropna()
     score_summary = scores.describe()
 
@@ -58,7 +55,6 @@ def cvss_analysis(data):
 
 
 def status_counts(data, column="status"):
-    """Count how many CVEs have each status."""
     counts = data[column].fillna("Unknown").value_counts().to_frame("count")
     counts["percent"] = counts["count"] / len(data) * 100
     return counts
@@ -80,10 +76,6 @@ def cves_per_year(data):
 
 
 def top_cwes_vendors_products(data, top_n=10):
-    """Find the most common CWEs, vendors and products.
-
-    Each one is counted once per CVE, even if it shows up several times.
-    """
     cwe_counts = Counter()
     vendor_counts = Counter()
     product_counts = Counter()
@@ -180,7 +172,6 @@ def save(fig, name):
 
 
 def plot_missing_values(missing):
-    """Horizontal bars: one per column, easy to read long column names."""
     missing = missing.sort_values("missing_percent")
     fig, ax = plt.subplots(figsize=(8, max(4, 0.35 * len(missing))))
     ax.barh(missing.index, missing["missing_percent"], color="#5c6bc0")
@@ -191,7 +182,6 @@ def plot_missing_values(missing):
 
 
 def plot_cvss(data, severity_counts):
-    """Histogram for the score distribution, bars for the severity categories."""
     scores = pd.to_numeric(data["cvss_score"], errors="coerce").dropna()
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 5))
@@ -216,7 +206,6 @@ def plot_cvss(data, severity_counts):
 
 
 def plot_status(status):
-    """Bar chart of the status categories (sorted by count)."""
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.bar(status.index.astype(str), status["count"], color="#26a69a")
     ax.set_ylabel("Number of CVEs")
@@ -226,7 +215,6 @@ def plot_status(status):
 
 
 def plot_cves_per_year(counts):
-    """Line chart: best for a trend over time."""
     fig, ax = plt.subplots(figsize=(11, 5))
     ax.plot(counts.index, counts["published"], marker="o", label="Published")
     ax.plot(counts.index, counts["modified"], marker="s", label="Modified")
@@ -239,7 +227,6 @@ def plot_cves_per_year(counts):
 
 
 def plot_top_tables(top):
-    """One horizontal bar chart per category (labels are often long)."""
     for name, table in top.items():
         table = table.iloc[::-1]  # biggest bar on top
         fig, ax = plt.subplots(figsize=(9, max(5, 0.3 * len(table))))
@@ -250,7 +237,6 @@ def plot_top_tables(top):
 
 
 def plot_text_analysis(word_counts, common_words, common_phrases):
-    # Box plot: compares the length distribution of the two text fields
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.boxplot(
         [word_counts["summary"], word_counts["description"]],
@@ -261,7 +247,6 @@ def plot_text_analysis(word_counts, common_words, common_phrases):
     ax.set_title("Text length distribution (outliers hidden)")
     save(fig, "text_length_distribution")
 
-    # Horizontal bars for the most common words and phrases
     for kind, tables, label in [("words", common_words, "term"),
                                 ("phrases", common_phrases, "phrase")]:
         fig, axes = plt.subplots(1, 2, figsize=(14, 6))
