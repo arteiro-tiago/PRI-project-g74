@@ -1,54 +1,51 @@
 # PRI-project-g74
 
+Projeto de recuperação de informação sobre vulnerabilidades CVE. A pipeline
+recolhe dados do NVD e do GitHub Advisory Database (GHAD), prepara os dados e
+gera uma coleção final para análise e indexação.
 
-## configurar
+## Requisitos
 
-**macOS / Linux:**
+- Python 3
+- `make`
+- `git`
 
-```bash
-python3 -m venv venv
+## Executar a pipeline
 
-source venv/bin/activate
-
-```
-
-**windows:**
-
-```bash
-python -m venv venv
-
-.\venv\Scripts\activate
-
-```
-
-## dependências
-
+Na root do repositório, correr:
 
 ```bash
-pip install -r "requirements.txt"
-
+make run
 ```
 
-## correr a pipeline
+O comando cria o ambiente virtual `venv` se necessário, instala as dependências
+de `requirements.txt` e executa, por ordem:
 
-O ficheiro `selected_cves.csv` contém a amostra NVD selecionada para o projeto.
-O script clona o GitHub Advisory Database, cruza os advisories com os CVEs do
-NVD através do campo `aliases` e gera a coleção final `final_cves.csv`.
+1. `nvd_collection.py`: clona e filtra os dados NVD;
+2. `nvd_preparation.py`: cria `selected_cves.csv`;
+3. `ghad_collection.py`: clona o GitHub Advisory Database;
+4. `ghad_preparation.py`: cruza e enriquece o csv no `final_cves.csv`.
+
+
+## Executar a caracterização
+
+Depois de a pipeline gerar `final_cves.csv`, executar:
 
 ```bash
-python NVD_extractor.py
-
+venv/bin/python characterizer.py
 ```
 
-O resultado contém 3.000 documentos NVD. Na execução validada, 2.791 CVEs
-encontraram correspondência no GHAD e 209 não tiveram advisory associado.
+## Outros comandos
 
-Os campos acrescentados pelo GHAD são `ghsa_id`, `aliases`, `summary` e
-`details`.
+Para apenas preparar o ambiente e instalar dependências:
 
-O merge mantém os valores do NVD quando existem e usa o GHAD como fallback para
-descrição, datas, CVSS e severidade. CWE, referências e produtos afetados são
-combinados e deduplicados quando possível.
+```bash
+make setup
+make install
+```
 
-O repositório GHAD é grande, por isso a primeira execução pode demorar alguns
-minutos e requer ligação à internet. É necessário ter `git` instalado.
+Para remover o ambiente virtual e ficheiros Python compilados:
+
+```bash
+make clean
+```

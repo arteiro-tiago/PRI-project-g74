@@ -1,9 +1,12 @@
 import json
+import os
 import re
 from collections import Counter
 
 import pandas as pd
 import matplotlib.pyplot as plt
+
+OUTPUT_DIR = "figures"
 
 # Common words we don't want to count
 STOP_WORDS = {
@@ -14,12 +17,23 @@ STOP_WORDS = {
     "which", "will", "with", "would",
 }
 
+SEVERITY_ORDER = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+SEVERITY_COLORS = {
+    "LOW": "#4caf50",
+    "MEDIUM": "#ffc107",
+    "HIGH": "#ff7043",
+    "CRITICAL": "#c62828",
+    "UNKNOWN": "#9e9e9e",
+}
+
 
 def get_words(text):
     if not isinstance(text, str):
         return []
     return re.findall(r"[a-z0-9]+(?:[._+-][a-z0-9]+)*", text.lower())
 
+
+# ----------------------------------------------------------------- analyses
 
 def missing_values(data):
     # treats empty strings like missing values
@@ -43,6 +57,13 @@ def cvss_analysis(data):
     return score_summary, severity_counts
 
 
+def status_counts(data, column="status"):
+    """Count how many CVEs have each status."""
+    counts = data[column].fillna("Unknown").value_counts().to_frame("count")
+    counts["percent"] = counts["count"] / len(data) * 100
+    return counts
+
+
 def cves_per_year(data):
     published = pd.to_datetime(data["published"], errors="coerce", utc=True).dt.year
     modified = pd.to_datetime(data["modified"], errors="coerce", utc=True).dt.year
@@ -58,7 +79,7 @@ def cves_per_year(data):
     return counts
 
 
-def top_cwes_vendors_products(data, top_n=30):
+def top_cwes_vendors_products(data, top_n=10):
     """Find the most common CWEs, vendors and products.
 
     Each one is counted once per CVE, even if it shows up several times.
@@ -150,53 +171,139 @@ def text_analysis(data, top_n=15):
     return pd.DataFrame(stats).T, common_words, common_phrases, word_counts
 
 
-def plot_text_analysis(word_counts, common_phrases, output_dir="figures"):
-    import os
-    os.makedirs(output_dir, exist_ok=True)
 
-    plt.figure(figsize=(8, 5))
-    plt.boxplot(
+def save(fig, name):
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    fig.tight_layout()
+    fig.savefig(f"{OUTPUT_DIR}/{name}.png", dpi=160)
+    plt.close(fig)
+
+
+def plot_missing_values(missing):
+    """Horizontal bars: one per column, easy to read long column names."""
+    missing = missing.sort_values("missing_percent")
+    fig, ax = plt.subplots(figsize=(8, max(4, 0.35 * len(missing))))
+    ax.barh(missing.index, missing["missing_percent"], color="#5c6bc0")
+    ax.set_xlim(0, 100)
+    ax.set_xlabel("Missing values (%)")
+    ax.set_title("Missing values per column")
+    save(fig, "missing_values")
+
+
+def plot_cvss(data, severity_counts):
+    """Histogram for the score distribution, bars for the severity categories."""
+    scores = pd.to_numeric(data["cvss_score"], errors="coerce").dropna()
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 5))
+
+    ax1.hist(scores, bins=20, range=(0, 10), color="#5c6bc0", edgecolor="white")
+    ax1.axvline(scores.median(), color="black", linestyle="--",
+                label=f"Median: {scores.median():.1f}")
+    ax1.set_xlabel("CVSS score")
+    ax1.set_ylabel("Number of CVEs")
+    ax1.set_title("CVSS score distribution")
+    ax1.legend()
+
+    order = [s for s in SEVERITY_ORDER if s in severity_counts.index]
+    order += [s for s in severity_counts.index if s not in order]
+    counts = severity_counts.loc[order, "count"]
+    ax2.bar(counts.index, counts.values,
+            color=[SEVERITY_COLORS.get(s, "#9e9e9e") for s in counts.index])
+    ax2.set_ylabel("Number of CVEs")
+    ax2.set_title("CVEs per severity level")
+
+    save(fig, "cvss")
+
+
+def plot_status(status):
+    """Bar chart of the status categories (sorted by count)."""
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.bar(status.index.astype(str), status["count"], color="#26a69a")
+    ax.set_ylabel("Number of CVEs")
+    ax.set_title("CVE status distribution")
+    plt.setp(ax.get_xticklabels(), rotation=30, ha="right")
+    save(fig, "status")
+
+
+def plot_cves_per_year(counts):
+    """Line chart: best for a trend over time."""
+    fig, ax = plt.subplots(figsize=(11, 5))
+    ax.plot(counts.index, counts["published"], marker="o", label="Published")
+    ax.plot(counts.index, counts["modified"], marker="s", label="Modified")
+    ax.set_xlabel("Year")
+    ax.set_ylabel("Number of CVEs")
+    ax.set_title("CVEs per year")
+    ax.grid(alpha=0.3)
+    ax.legend()
+    save(fig, "cves_per_year")
+
+
+def plot_top_tables(top):
+    """One horizontal bar chart per category (labels are often long)."""
+    for name, table in top.items():
+        table = table.iloc[::-1]  # biggest bar on top
+        fig, ax = plt.subplots(figsize=(9, max(5, 0.3 * len(table))))
+        ax.barh(table[name], table["cve_count"], color="#5c6bc0")
+        ax.set_xlabel("Number of CVEs")
+        ax.set_title(f"Most frequent {name}s")
+        save(fig, f"top_{name}s")
+
+
+def plot_text_analysis(word_counts, common_words, common_phrases):
+    # Box plot: compares the length distribution of the two text fields
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.boxplot(
         [word_counts["summary"], word_counts["description"]],
         tick_labels=["Summary", "Description"],
         showfliers=False,
     )
-    plt.ylabel("Words per document")
-    plt.title("Text length distribution (outliers hidden)")
-    plt.tight_layout()
-    plt.savefig(f"{output_dir}/text_length_distribution.png", dpi=160)
-    plt.close()
+    ax.set_ylabel("Words per document")
+    ax.set_title("Text length distribution (outliers hidden)")
+    save(fig, "text_length_distribution")
 
-    # Common phrases bar charts
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-    for ax, column in zip(axes, ["summary", "description"]):
-        phrases = common_phrases[column].sort_values("documents")
-        ax.barh(phrases["phrase"], phrases["documents"])
-        ax.set_title(f"Common phrases in {column}s")
-        ax.set_xlabel("Documents containing phrase")
-    plt.tight_layout()
-    plt.savefig(f"{output_dir}/common_text_phrases.png", dpi=160)
-    plt.close()
+    # Horizontal bars for the most common words and phrases
+    for kind, tables, label in [("words", common_words, "term"),
+                                ("phrases", common_phrases, "phrase")]:
+        fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+        for ax, column in zip(axes, ["summary", "description"]):
+            table = tables[column].sort_values("documents")
+            ax.barh(table[label], table["documents"], color="#26a69a")
+            ax.set_title(f"Common {kind} in {column}s")
+            ax.set_xlabel(f"Documents containing {label}")
+        save(fig, f"common_text_{kind}")
+
 
 
 def main():
     cves = pd.read_csv("final_cves.csv")
     print(f"Nr of cves: {cves["cve_id"].unique().size}")
     print("Missing values:")
-    print(missing_values(cves))
+    missing = missing_values(cves)
+    print(missing)
+    plot_missing_values(missing)
 
     score_summary, severity_counts = cvss_analysis(cves)
     print("\nCVSS score summary:")
     print(score_summary)
     print("\nCVSS severity distribution:")
     print(severity_counts)
+    plot_cvss(cves, severity_counts)
+
+    print("\nCVE status distribution:")
+    status = status_counts(cves)
+    print(status)
+    plot_status(status)
 
     print("\nCVEs per year:")
-    print(cves_per_year(cves))
+    per_year = cves_per_year(cves)
+    print(per_year)
+    plot_cves_per_year(per_year)
 
     top = top_cwes_vendors_products(cves)
     for name, table in top.items():
         print(f"\nMost frequent {name}s:")
         print(table.to_string(index=False))
+    plot_top_tables(top)
 
     stats, words, phrases, word_counts = text_analysis(cves)
     print("\nText field stats:")
@@ -207,9 +314,9 @@ def main():
         print(words[column].to_string(index=False))
         print(f"\nMost common two-word phrases in {column}:")
         print(phrases[column].to_string(index=False))
+    plot_text_analysis(word_counts, words, phrases)
 
-    plot_text_analysis(word_counts, phrases)
-    print("\nCharts saved to the 'figures' folder.")
+    print(f"\nCharts saved to the '{OUTPUT_DIR}' folder.")
 
 
 if __name__ == "__main__":

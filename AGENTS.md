@@ -65,11 +65,17 @@ This repo is intended to support the first milestone pipeline for:
 
 Current implementation:
 
-- `NVD_extractor.py` manages the data acquisition and export pipeline.
-- The existing `selected_cves.csv` contains the selected NVD records.
-- It clones the GitHub Advisory Database and indexes advisories by CVE values in `aliases`.
-- It merges NVD and GHAD data and exports the enriched collection to `final_cves.csv`.
-- NVD remains the primary source for structured fields; GHAD provides `summary`, `details`, `ghsa_id`, and additional enrichment.
+- `nvd_collection.py` clones and filters the NVD data feed.
+- `nvd_preparation.py` converts the selected NVD JSON records into `selected_cves.csv`.
+- `ghad_collection.py` clones the GitHub Advisory Database.
+- `ghad_preparation.py` joins advisories to NVD records through CVE aliases and
+  writes the enriched `final_cves.csv`.
+- NVD remains the primary source for structured fields; GHAD enriches matching
+  records with fields such as `summary`, `ghsa_id`, references, CWE, and
+  affected packages. The preparation step removes `details` and `aliases` from
+  the final CSV.
+- `characterizer.py` analyzes the generated collection and saves text-analysis
+  charts under `characterization_figures/`.
 
 This is the starting point for the project; future work should evolve it into a reproducible, documented data processing pipeline for the full project.
 
@@ -161,36 +167,28 @@ At minimum, the team should produce:
 
 ## 7. Repository workflow
 
-### Local setup
+### Local setup and pipeline
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+make run
 ```
 
-The pipeline also requires `git` and an internet connection because it clones
-the GitHub Advisory Database during execution.
+Run this from the repository root. The Makefile creates the `venv` virtual
+environment if needed, installs `requirements.txt`, and runs the NVD and GHAD
+collection/preparation scripts in order. The pipeline requires Python 3,
+`make`, `git`, and an internet connection because it clones the source
+repositories. It produces `selected_cves.csv` and `final_cves.csv`; subsequent
+runs recollect the source repositories.
 
-### Run the current extraction script
+### Run the characterization
 
 ```bash
-python NVD_extractor.py
+venv/bin/python characterizer.py
 ```
 
-### Expected output
-
-The script currently:
-
-- reads the selected NVD collection from `selected_cves.csv`;
-- clones the GitHub Advisory Database;
-- indexes GHAD advisories by CVE aliases;
-- enriches matching NVD documents with summaries, details, references, CWE and affected packages;
-- writes the final collection to `final_cves.csv`.
-
-The validated run produced 3,000 NVD documents, with 2,791 enriched by GHAD
-and 209 without a matching advisory. The final corpus is intended for later
-indexing and retrieval with Solr.
+Run this after `make run` has generated `final_cves.csv`. It prints collection
+statistics and text analysis for `summary` and `description`, and saves charts
+to `characterization_figures/`.
 
 ---
 

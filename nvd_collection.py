@@ -34,6 +34,7 @@ def filter_cve_data(start_year, end_year, n_per_year, repo_name):
                 shutil.rmtree(item)
             else:
                 json_files = sorted(item.rglob("*.json"))
+                random.seed(42)
                 random.shuffle(json_files)
                 files_to_delete = json_files[n_per_year:]
                 for file_path in files_to_delete:
