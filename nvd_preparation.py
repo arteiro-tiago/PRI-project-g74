@@ -33,7 +33,7 @@ def extract_cwe(data):
     for weakness in data.get("weaknesses", []):
         for description in weakness.get("description", []):
             value = description.get("value")
-            if value and value not in cwes:
+            if value and value != "NVD-CWE-noinfo" and value not in cwes:
                 cwes.append(value)
     return cwes
 
@@ -107,6 +107,9 @@ def create_csv_with_pandas(csv_filename, repo_name):
 
     df = pd.DataFrame(all_data)
     df = df.dropna(subset=["cve_id"])
+    
+    # Remove rows where status is rejected
+    df = df[df["status"].str.lower() != "rejected"]
 
     df.to_csv(csv_filename, index=False, encoding="utf-8")
 
