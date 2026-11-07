@@ -1,0 +1,20 @@
+{
+"add-field": [
+      {"name": "cve_id", "type": "string", "multiValued": false},
+      {"name": "description", "type": "text_general", "multiValued": false},
+      {"name": "published", "type": "pdate", "multiValued": false},
+      {"name": "modified", "type": "pdate", "multiValued": false},
+      {"name": "status", "type": "string", "multiValued": false},
+      {"name": "summary", "type": "text_general", "multiValued": false},
+      {"name": "ghsa_id", "type": "string", "multiValued": false},
+      
+      {"name": "cvss_version", "type": "pfloat", "multiValued": false},
+      {"name": "cvss_score", "type": "pfloat", "multiValued": false},
+      {"name": "cvss_severity", "type": "string", "multiValued": false},
+      {"name": "cvss_vector", "type": "string", "multiValued": false},
+
+      {"name": "affected", "type": "text_general", "multiValued": true},
+      {"name": "cwe", "type": "string", "multiValued": true},
+      {"name": "references", "type": "string", "multiValued": true}
+    ]
+}

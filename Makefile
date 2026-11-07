@@ -7,6 +7,7 @@ SOLR_PORT = 8983
 COLLECTION_NAME = cves
 CSV_FILE = final_cves.csv
 SOLR_IMAGE = solr:latest
+SCHEMA_FILE = schema.json
 
 .PHONY: preparation setup install run clean solr-setup run-container create-collection populate-collection clean-solr
 
@@ -27,7 +28,7 @@ run: install
 clean:
 	rm -rf $(VENV) __pycache__ *.pyc
 
-solr-setup: run-container create-collection populate-collection
+solr-setup: run-container create-collection configure-schema populate-collection
 
 run-container:
 	@if [ $$(docker ps -a -q -f name=^/$(SOLR_CONTAINER_NAME)$$ | wc -l) -eq 0 ]; then \
@@ -53,6 +54,13 @@ create-collection:
 		echo "Creating collection '$(COLLECTION_NAME)'..."; \
 		docker exec -i $(SOLR_CONTAINER_NAME) solr create -c $(COLLECTION_NAME); \
 	fi
+
+configure-schema:
+	@echo "Applying custom schema from $(SCHEMA_FILE)..."
+	curl -X POST -H 'Content-type:application/json' \
+		--data-binary "@$(SCHEMA_FILE)" \
+		"http://localhost:$(SOLR_PORT)/solr/$(COLLECTION_NAME)/schema"
+	@echo "\nSchema configured successfully!"
 
 populate-collection:
 	@echo "Copying $(CSV_FILE) to container..."
