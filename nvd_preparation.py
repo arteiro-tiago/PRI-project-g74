@@ -96,8 +96,11 @@ def create_csv_with_pandas(csv_filename, repo_name):
                 "cvss_severity": cvss.get("severity"),
                 "cvss_vector": cvss.get("vector"),
                 "cwe": ";".join(cwe),
-                "affected": json.dumps(affected, ensure_ascii=False),
                 "references": ";".join(references),
+                "affected": ";".join(
+                    json.dumps(item, ensure_ascii=False)
+                    for item in affected
+                )
             }
 
             all_data.append(record)

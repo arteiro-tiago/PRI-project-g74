@@ -18,19 +18,72 @@ GHAD_REPO_NAME = "github-advisory-database"
 def unique_values(values):
     return list(dict.fromkeys(value for value in values if value))
 
-
 def unique_json_objects(values):
     unique = []
     seen = set()
-
     for value in values:
         key = json.dumps(value, sort_keys=True, ensure_ascii=False)
         if key not in seen:
             seen.add(key)
             unique.append(value)
-
     return unique
 
+def parse_semicolon_list(value):
+    """Parse semicolon-separated string from NVD CSV."""
+    if not value:
+        return []
+    return [v.strip() for v in value.split(";") if v.strip()]
+
+def parse_nvd_affected(value):
+    """Parse semicolon-separated JSON objects from NVD affected column."""
+    if not value:
+        return []
+    affected = []
+    for item in value.split(";"):
+        if item.strip():
+            try:
+                parsed = json.loads(item)
+                if isinstance(parsed, dict):
+                    affected.append(parsed)
+            except (json.JSONDecodeError, TypeError):
+                continue
+    return affected
+
+def ghad_affected(advisory):
+    """Map GHAD affected packages to match NVD structure as dictionaries."""
+    affected = []
+    for entry in advisory.get("affected", []):
+        package = entry.get("package", {})
+        ecosystem = package.get("ecosystem")
+        name = package.get("name")
+        
+        # Map version ranges
+        for rng in entry.get("ranges", []):
+            events = rng.get("events", [])
+            introduced = next((e.get("introduced") for e in events if "introduced" in e), "0")
+            fixed = next((e.get("fixed") for e in events if "fixed" in e), None)
+            
+            affected.append({
+                "vendor": ecosystem,
+                "product": name,
+                "version": introduced,
+                "less_than": fixed,
+                "version_type": rng.get("type"),
+                "status": "affected",
+            })
+            
+        # Map specific versions
+        for version in entry.get("versions", []):
+            affected.append({
+                "vendor": ecosystem,
+                "product": name,
+                "version": version,
+                "less_than": None,
+                "version_type": "semver",
+                "status": "affected",
+            })
+            
+    return affected
 
 def ghad_references(advisory):
     references = []
@@ -41,44 +94,64 @@ def ghad_references(advisory):
             references.append(reference.get("url"))
     return unique_values(references)
 
-
 def ghad_cwes(advisory):
     database_specific = advisory.get("database_specific", {})
     cwes = database_specific.get("cwe_ids", [])
     return cwes if isinstance(cwes, list) else [cwes]
 
-
 def ghad_cvss(advisory):
     cvss = advisory.get("cvss", {})
     if not isinstance(cvss, dict):
         return {}
-
     return {
         "score": cvss.get("score"),
         "vector": cvss.get("vector_string") or cvss.get("vectorString"),
         "version": cvss.get("version"),
     }
 
-
 def ghad_affected(advisory):
+    """Map GHAD affected packages to match NVD structure (vendor, product, version, etc.)."""
     affected = []
     for entry in advisory.get("affected", []):
         package = entry.get("package", {})
-        affected.append({
-            "ecosystem": package.get("ecosystem"),
-            "name": package.get("name"),
-            "ranges": entry.get("ranges", []),
-            "versions": entry.get("versions", []),
-            "source": "GHAD",
-        })
+        ecosystem = package.get("ecosystem")
+        name = package.get("name")
+        
+        # Extract version ranges or specific versions to align with NVD structure
+        for rng in entry.get("ranges", []):
+            events = rng.get("events", [])
+            introduced = next((e.get("introduced") for e in events if "introduced" in e), "0")
+            fixed = next((e.get("fixed") for e in events if "fixed" in e), None)
+            
+            affected.append({
+                "vendor": ecosystem,
+                "product": name,
+                "version": introduced,
+                "less_than": fixed,
+                "version_type": rng.get("type"),
+                "status": "affected",
+            })
+            
+        for version in entry.get("versions", []):
+            affected.append({
+                "vendor": ecosystem,
+                "product": name,
+                "version": version,
+                "less_than": None,
+                "version_type": "semver",
+                "status": "affected",
+            })
+            
     return affected
-
 
 def index_ghad_advisories(ghad_path):
     """Index GHAD advisory records by CVE alias."""
     advisories_by_cve = {}
+    path = Path(ghad_path)
+    if not path.exists():
+        return advisories_by_cve
 
-    for json_file in Path(ghad_path).rglob("*.json"):
+    for json_file in path.rglob("*.json"):
         try:
             with json_file.open("r", encoding="utf-8") as file:
                 advisory = json.load(file)
@@ -97,21 +170,25 @@ def index_ghad_advisories(ghad_path):
 
     return advisories_by_cve
 
-
 def merge_ghad_advisories(nvd_record, advisories):
     """Enrich an NVD record dictionary with matched GHAD advisories."""
     ghsa_ids = []
     summaries = []
     details = []
-    cwes = [value.strip() for value in nvd_record.get("cwe", "").split(";")]
-    references = [value.strip() for value in nvd_record.get("references", "").split(";")]
+    
+    cwes = parse_semicolon_list(nvd_record.get("cwe", ""))
+    references = parse_semicolon_list(nvd_record.get("references", ""))
+    affected = parse_nvd_affected(nvd_record.get("affected", ""))
+    
+    for advisory in advisories:
+        affected.extend(ghad_affected(advisory))
 
-    try:
-        affected = json.loads(nvd_record.get("affected", "[]"))
-    except json.JSONDecodeError:
-        affected = []
+    nvd_record["affected"] = ";".join(
+        json.dumps(item, ensure_ascii=False)
+        for item in unique_json_objects(affected)
+    )
 
-    ghad_cvss_data = {}  # Renamed from ghad_cvss to avoid shadowing the function
+    ghad_cvss_data = {}
     ghad_severity = None
     ghad_published = []
     ghad_modified = []
@@ -136,9 +213,9 @@ def merge_ghad_advisories(nvd_record, advisories):
     nvd_record["details"] = "\n\n".join(unique_values(details))
     nvd_record["cwe"] = ";".join(unique_values(cwes))
     nvd_record["references"] = ";".join(unique_values(references))
-    nvd_record["affected"] = json.dumps(
-        unique_json_objects(affected),
-        ensure_ascii=False,
+    nvd_record["affected"] = ";".join(
+        json.dumps(item, ensure_ascii=False)
+        for item in unique_json_objects(affected)
     )
 
     if nvd_record.get("details"):
@@ -181,18 +258,14 @@ def merge_ghad_with_nvd(nvd_filename, ghad_path, output_filename):
         writer.writerows(records)
 
     df = pd.read_csv(output_filename)
-    if "details" in df.columns:
-        df = df.drop(columns=["details"])
-        df.to_csv(output_filename, index=False, encoding="utf-8")
-    if "aliases" in df.columns:
-            df = df.drop(columns=["aliases"])
-            df.to_csv(output_filename, index=False, encoding="utf-8")
-    
+    for col in ["details", "aliases"]:
+        if col in df.columns:
+            df = df.drop(columns=[col])
+    df.to_csv(output_filename, index=False, encoding="utf-8")
 
     print(f"GHAD advisories indexed: {len(advisories_by_cve)} CVE aliases")
     print(f"NVD records enriched: {matched}/{len(records)}")
     print(f"finished creating {output_filename}")
-
 
 if __name__ == "__main__":
     merge_ghad_with_nvd(

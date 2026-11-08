@@ -64,9 +64,11 @@ configure-schema:
 
 populate-collection:
 	@echo "Copying $(CSV_FILE) to container..."
-	docker cp $(CSV_FILE) $(SOLR_CONTAINER_NAME):/tmp/$(CSV_FILE)
-	@echo "Indexing $(CSV_FILE) into collection '$(COLLECTION_NAME)'..."
-	docker exec -i $(SOLR_CONTAINER_NAME) bin/solr post -c $(COLLECTION_NAME) /tmp/$(CSV_FILE)
+	docker cp final_cves.csv my-solr:/tmp/final_cves.csv
+	docker exec my-solr curl -X POST \
+		'http://localhost:8983/solr/cves/update/csv?commit=true&f.cwe.split=true&f.cwe.separator=%3B&f.references.split=true&f.references.separator=%3B&f.affected.split=true&f.affected.separator=%3B' \
+		-H 'Content-Type: text/csv' \
+		--data-binary @/tmp/final_cves.csv
 	@echo "Data populated successfully!"
 
 clean-solr:
