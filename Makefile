@@ -63,12 +63,13 @@ configure-schema:
 	@echo "\nSchema configured successfully!"
 
 populate-collection:
-	@echo "Copying $(CSV_FILE) to container..."
-	docker cp final_cves.csv my-solr:/tmp/final_cves.csv
+	@echo "Copying final_cves.json to container..."
+	docker cp final_cves.json my-solr:/tmp/final_cves.json
+	@echo "Populating collection using Solr JSON update handler..."
 	docker exec my-solr curl -X POST \
-		'http://localhost:8983/solr/cves/update/csv?commit=true&f.cwe.split=true&f.cwe.separator=%3B&f.references.split=true&f.references.separator=%3B&f.affected.split=true&f.affected.separator=%3B' \
-		-H 'Content-Type: text/csv' \
-		--data-binary @/tmp/final_cves.csv
+		'http://localhost:8983/solr/cves/update/json/docs?commit=true' \
+		-H 'Content-Type: application/json' \
+		--data-binary @/tmp/final_cves.json
 	@echo "Data populated successfully!"
 
 clean-solr:
