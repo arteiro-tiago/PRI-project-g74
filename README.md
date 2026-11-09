@@ -9,6 +9,7 @@ gera uma coleção final para análise e indexação.
 - Python 3
 - `make`
 - `git`
+- Docker
 
 ## Executar a pipeline
 
@@ -35,6 +36,14 @@ Depois de a pipeline gerar `final_cves.csv`, executar:
 venv/bin/python characterizer.py
 ```
 
+## Instalar Solr e popular collection
+
+Na root do repositório, correr:
+
+```bash
+make solr-setup
+```
+
 ## Outros comandos
 
 Para apenas preparar o ambiente e instalar dependências:
@@ -48,4 +57,10 @@ Para remover o ambiente virtual e ficheiros Python compilados:
 
 ```bash
 make clean
+```
+
+Para remover o container contendo o Solr:
+
+```bash
+make clean-solr
 ```
