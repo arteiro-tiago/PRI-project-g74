@@ -20,11 +20,8 @@ install: setup
 	@$(PIP) install -r requirements.txt
 
 run: install
-	@$(PYTHON) nvd_collection.py
-	@$(PYTHON) nvd_preparation.py
-	@$(PYTHON) ghad_collection.py
-	@$(PYTHON) ghad_preparation.py
-
+	@$(PYTHON) src/nvd_preparation.py
+	
 clean:
 	rm -rf $(VENV) __pycache__ *.pyc
 
