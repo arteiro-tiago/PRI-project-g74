@@ -1,17 +1,5 @@
-import csv
 import json
-import sys
-import pandas as pd
 from pathlib import Path
-
-# Fix: Set maximum allowed CSV field size limit
-max_int = sys.maxsize
-while True:
-    try:
-        csv.field_size_limit(max_int)
-        break
-    except OverflowError:
-        max_int = int(max_int / 10)
 
 GHAD_REPO_NAME = "github-advisory-database"
 
@@ -27,27 +15,6 @@ def unique_json_objects(values):
             seen.add(key)
             unique.append(value)
     return unique
-
-def parse_semicolon_list(value):
-    """Parse semicolon-separated string from NVD CSV."""
-    if not value:
-        return []
-    return [v.strip() for v in value.split(";") if v.strip()]
-
-def parse_nvd_affected(value):
-    """Parse semicolon-separated JSON objects from NVD affected column."""
-    if not value:
-        return []
-    affected = []
-    for item in value.split(";"):
-        if item.strip():
-            try:
-                parsed = json.loads(item)
-                if isinstance(parsed, dict):
-                    affected.append(parsed)
-            except (json.JSONDecodeError, TypeError):
-                continue
-    return affected
 
 def ghad_affected(advisory):
     """Map GHAD affected packages to match NVD structure as dictionaries."""
@@ -109,41 +76,6 @@ def ghad_cvss(advisory):
         "version": cvss.get("version"),
     }
 
-def ghad_affected(advisory):
-    """Map GHAD affected packages to match NVD structure (vendor, product, version, etc.)."""
-    affected = []
-    for entry in advisory.get("affected", []):
-        package = entry.get("package", {})
-        ecosystem = package.get("ecosystem")
-        name = package.get("name")
-        
-        # Extract version ranges or specific versions to align with NVD structure
-        for rng in entry.get("ranges", []):
-            events = rng.get("events", [])
-            introduced = next((e.get("introduced") for e in events if "introduced" in e), "0")
-            fixed = next((e.get("fixed") for e in events if "fixed" in e), None)
-            
-            affected.append({
-                "vendor": ecosystem,
-                "product": name,
-                "version": introduced,
-                "less_than": fixed,
-                "version_type": rng.get("type"),
-                "status": "affected",
-            })
-            
-        for version in entry.get("versions", []):
-            affected.append({
-                "vendor": ecosystem,
-                "product": name,
-                "version": version,
-                "less_than": None,
-                "version_type": "semver",
-                "status": "affected",
-            })
-            
-    return affected
-
 def index_ghad_advisories(ghad_path):
     """Index GHAD advisory records by CVE alias."""
     advisories_by_cve = {}
@@ -176,23 +108,10 @@ def merge_ghad_advisories(nvd_record, advisories):
     summaries = []
     details = []
     
-    cwes = parse_semicolon_list(nvd_record.get("cwe", ""))
-    references = parse_semicolon_list(nvd_record.get("references", ""))
-    affected = parse_nvd_affected(nvd_record.get("affected", ""))
+    cwes = list(nvd_record.get("cwe", []))
+    references = list(nvd_record.get("references", []))
+    affected = list(nvd_record.get("affected", []))
     
-    for advisory in advisories:
-        affected.extend(ghad_affected(advisory))
-
-    nvd_record["affected"] = ";".join(
-        json.dumps(item, ensure_ascii=False)
-        for item in unique_json_objects(affected)
-    )
-
-    ghad_cvss_data = {}
-    ghad_severity = None
-    ghad_published = []
-    ghad_modified = []
-
     for advisory in advisories:
         ghsa_ids.append(advisory.get("id"))
         summaries.append(advisory.get("summary"))
@@ -201,25 +120,23 @@ def merge_ghad_advisories(nvd_record, advisories):
         references.extend(ghad_references(advisory))
         affected.extend(ghad_affected(advisory))
 
-        advisory_cvss = ghad_cvss(advisory)
-        if not ghad_cvss_data and advisory_cvss:
-            ghad_cvss_data = advisory_cvss
-        ghad_severity = ghad_severity or advisory.get("severity")
-        ghad_published.append(advisory.get("published"))
-        ghad_modified.append(advisory.get("modified"))
-
-    nvd_record["ghsa_id"] = ";".join(unique_values(ghsa_ids))
+    ghsa_list = unique_values(ghsa_ids)
+    nvd_record["ghsa_id"] = ";".join(ghsa_list) if ghsa_list else ""
+    
     nvd_record["summary"] = "\n\n".join(unique_values(summaries))
     nvd_record["details"] = "\n\n".join(unique_values(details))
-    nvd_record["cwe"] = ";".join(unique_values(cwes))
-    nvd_record["references"] = ";".join(unique_values(references))
-    nvd_record["affected"] = ";".join(
-        json.dumps(item, ensure_ascii=False)
-        for item in unique_json_objects(affected)
-    )
+    nvd_record["cwe"] = unique_values(cwes)
+    nvd_record["references"] = unique_values(references)
+    nvd_record["affected"] = unique_json_objects(affected)
 
     if nvd_record.get("details"):
         nvd_record["description"] = nvd_record["details"]
+    
+    ghad_published = [a.get("published") for a in advisories]
+    ghad_modified = [a.get("modified") for a in advisories]
+    ghad_cvss_data = next((ghad_cvss(a) for a in advisories if ghad_cvss(a)), {})
+    ghad_severity = next((a.get("severity") for a in advisories if a.get("severity")), None)
+
     if not nvd_record.get("published"):
         nvd_record["published"] = next((value for value in ghad_published if value), "")
     if not nvd_record.get("modified"):
@@ -234,16 +151,11 @@ def merge_ghad_advisories(nvd_record, advisories):
     return nvd_record
 
 def merge_ghad_with_nvd(nvd_filename, ghad_path, output_filename):
-    """Combine NVD CSV records with indexed GHAD data and write output."""
+    """Combine NVD JSON records with indexed GHAD data and write output using pure JSON."""
     advisories_by_cve = index_ghad_advisories(ghad_path)
 
-    with open(nvd_filename, "r", encoding="utf-8", newline="") as file:
-        records = list(csv.DictReader(file))
-
-    fieldnames = list(records[0].keys()) if records else []
-    for field in ["ghsa_id", "aliases", "summary", "details"]:
-        if field not in fieldnames:
-            fieldnames.append(field)
+    with open(nvd_filename, "r", encoding="utf-8") as file:
+        records = json.load(file)
 
     matched = 0
     for record in records:
@@ -252,16 +164,12 @@ def merge_ghad_with_nvd(nvd_filename, ghad_path, output_filename):
             matched += 1
         merge_ghad_advisories(record, advisories)
 
-    with open(output_filename, "w", encoding="utf-8", newline="") as file:
-        writer = csv.DictWriter(file, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(records)
+        # Remove unwanted fields (details, aliases) directly from dictionary records
+        for col in ["details", "aliases"]:
+            record.pop(col, None)
 
-    df = pd.read_csv(output_filename)
-    for col in ["details", "aliases"]:
-        if col in df.columns:
-            df = df.drop(columns=[col])
-    df.to_csv(output_filename, index=False, encoding="utf-8")
+    with open(output_filename, "w", encoding="utf-8") as file:
+        json.dump(records, file, ensure_ascii=False, indent=4)
 
     print(f"GHAD advisories indexed: {len(advisories_by_cve)} CVE aliases")
     print(f"NVD records enriched: {matched}/{len(records)}")
@@ -269,7 +177,7 @@ def merge_ghad_with_nvd(nvd_filename, ghad_path, output_filename):
 
 if __name__ == "__main__":
     merge_ghad_with_nvd(
-        "selected_cves.csv",
+        "selected_cves.json",
         GHAD_REPO_NAME,
-        "final_cves.csv",
+        "final_cves.json",
     )

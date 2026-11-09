@@ -58,8 +58,8 @@ def extract_affected(data):
     return affected
 
 
-def create_csv_with_pandas(csv_filename, repo_name):
-    """Parse NVD JSON feeds into a single Pandas DataFrame and save as CSV."""
+def create_json_with_pandas(json_filename, repo_name):
+    """Parse NVD JSON feeds into a single Pandas DataFrame and save as JSON."""
     path = Path(repo_name)
     all_data = []
     
@@ -95,12 +95,9 @@ def create_csv_with_pandas(csv_filename, repo_name):
                 "cvss_score": cvss.get("score"),
                 "cvss_severity": cvss.get("severity"),
                 "cvss_vector": cvss.get("vector"),
-                "cwe": ";".join(cwe),
-                "references": ";".join(references),
-                "affected": ";".join(
-                    json.dumps(item, ensure_ascii=False)
-                    for item in affected
-                )
+                "cwe": cwe,
+                "references": references,
+                "affected": affected
             }
 
             all_data.append(record)
@@ -114,11 +111,12 @@ def create_csv_with_pandas(csv_filename, repo_name):
     # Remove rows where status is rejected
     df = df[df["status"].str.lower() != "rejected"]
 
-    df.to_csv(csv_filename, index=False, encoding="utf-8")
+    with open(json_filename, "w", encoding="utf-8") as f:
+        json.dump(all_data, f, ensure_ascii=False, indent=4)
 
-    print("finished creating CSV :)")
+    print("finished creating JSON :)")
     print(f"CVEs extracted: {len(df)}")
 
 
 if __name__ == "__main__":
-    create_csv_with_pandas("selected_cves.csv", REPO_NAME)
+    create_json_with_pandas("selected_cves.json", REPO_NAME)
