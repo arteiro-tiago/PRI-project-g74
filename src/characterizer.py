@@ -1,13 +1,15 @@
 import json
 import os
 import re
+from pathlib import Path
 from collections import Counter
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-OUTPUT_DIR = "figures"
+BASE_DIR = Path(__file__).resolve().parent.parent
+OUTPUT_DIR = BASE_DIR / "figures"
 
 # common words we don't want to count
 STOP_WORDS = {
@@ -81,13 +83,17 @@ def top_cwes_vendors_products(data, top_n=10):
     product_counts = Counter()
 
     for _, row in data.iterrows():
-        if isinstance(row["cwe"], str):
-            cwes = {c.strip() for c in row["cwe"].split(";") if c.strip()}
+        cwe_data = row["cwe"]
+        if isinstance(cwe_data, list):
+            cwes = {str(c).strip() for c in cwe_data if c}
+            cwe_counts.update(cwes)
+        elif isinstance(cwe_data, str):
+            cwes = {c.strip() for c in cwe_data.split(";") if c.strip()}
             cwe_counts.update(cwes)
 
-        if not isinstance(row["affected"], str):
+        affected = row["affected"]
+        if not isinstance(affected, list):
             continue
-        affected = json.loads(row["affected"])
 
         vendors = set()
         products = set()
@@ -112,7 +118,6 @@ def top_cwes_vendors_products(data, top_n=10):
         table["percent"] = table["cve_count"] / len(data) * 100
         results[name] = table
     return results
-
 
 def text_analysis(data, top_n=15):
 
@@ -260,7 +265,7 @@ def plot_text_analysis(word_counts, common_words, common_phrases):
 
 
 def main():
-    cves = pd.read_csv("final_cves.csv")
+    cves = pd.read_json(BASE_DIR / "final_cves.json")
     print(f"Nr of cves: {cves["cve_id"].unique().size}")
     print("Missing values:")
     missing = missing_values(cves)
