@@ -1,0 +1,63 @@
+{
+  "add-field-type": [
+    {
+      "name": "cveText",
+      "class": "solr.TextField",
+      "indexAnalyzer": {
+        "tokenizer": {
+          "class": "solr.StandardTokenizerFactory"
+        },
+        "filters": [
+          {"class": "solr.EnglishPossessiveFilterFactory"},
+          {"class": "solr.ASCIIFoldingFilterFactory", "preserveOriginal": true},
+          {"class": "solr.LowerCaseFilterFactory"},
+          {"class": "solr.StopFilterFactory", "ignoreCase": "true", "words": "stopwords.txt", "format": "wordset"}
+        ]
+      },
+      "queryAnalyzer": {
+        "tokenizer": {
+          "class": "solr.StandardTokenizerFactory"
+        },
+        "filters": [
+          {"class": "solr.EnglishPossessiveFilterFactory"},
+          {"class": "solr.ASCIIFoldingFilterFactory", "preserveOriginal": true},
+          {"class": "solr.LowerCaseFilterFactory"},
+          {"class": "solr.StopFilterFactory", "ignoreCase": "true", "words": "stopwords.txt", "format": "wordset"}
+        ]
+      }
+    }
+  ],
+  "add-field": [
+    {"name": "cve_id", "type": "string", "multiValued": false, "indexed": true, "stored": true},
+    {"name": "description", "type": "cveText", "multiValued": false, "indexed": true, "stored": true},
+    {"name": "published", "type": "pdate", "multiValued": false, "indexed": true, "stored": true},
+    {"name": "modified", "type": "pdate", "multiValued": false, "indexed": true, "stored": true},
+    {"name": "status", "type": "string", "multiValued": false, "indexed": true, "stored": true},
+    {"name": "summary", "type": "cveText", "multiValued": false, "indexed": true, "stored": true},
+    {"name": "ghsa_id", "type": "string", "multiValued": false, "indexed": true, "stored": true},
+    {"name": "cvss_version", "type": "pfloat", "multiValued": false, "indexed": true, "stored": true},
+    {"name": "cvss_score", "type": "pfloat", "multiValued": false, "indexed": true, "stored": true},
+    {"name": "cvss_severity", "type": "string", "multiValued": false, "indexed": true, "stored": true},
+    {"name": "cvss_vector", "type": "string", "multiValued": false, "indexed": true, "stored": true},
+    {"name": "affected", "type": "cveText", "multiValued": true, "indexed": true, "stored": true},
+    {"name": "cwe", "type": "string", "multiValued": true, "indexed": true, "stored": true},
+    {"name": "references", "type": "string", "multiValued": true, "indexed": true, "stored": true},
+    {"name": "text_all", "type": "cveText", "multiValued": true, "indexed": true, "stored": false}
+  ],
+  "add-copy-field": [
+    {"source": "cve_id", "dest": "text_all"},
+    {"source": "description", "dest": "text_all"},
+    {"source": "summary", "dest": "text_all"},
+    {"source": "affected", "dest": "text_all"},
+    {"source": "cwe", "dest": "text_all"}
+  ],
+  "add-dynamic-field": [
+    {
+      "name": "affected.*",
+      "type": "string",
+      "multiValued": true,
+      "indexed": true,
+      "stored": true
+    }
+  ]
+}

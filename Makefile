@@ -4,12 +4,14 @@ PIP = $(VENV)/bin/pip
 
 SOLR_CONTAINER_NAME = my-solr
 SOLR_PORT = 8983
-COLLECTION_NAME = cves
-CSV_FILE = final_cves.csv
+COLLECTION_SIMPLE = cves_simple
+COLLECTION_ADVANCED = cves_advanced
+SCHEMA_SIMPLE = schema_simple.json
+SCHEMA_ADVANCED = schema_advanced.json
+JSON_FILE = final_cves.json
 SOLR_IMAGE = solr:latest
-SCHEMA_FILE = schema.json
 
-.PHONY: preparation setup install run clean solr-setup run-container create-collection populate-collection clean-solr
+.PHONY: preparation setup install run clean solr-setup run-container create-collections configure-schemas populate-collections clean-solr
 
 preparation: setup install run
 
@@ -28,7 +30,7 @@ run: install
 clean:
 	rm -rf $(VENV) __pycache__ *.pyc
 
-solr-setup: run-container create-collection configure-schema populate-collection
+solr-setup: run-container create-collections configure-schemas populate-collections
 
 run-container:
 	@if [ $$(docker ps -a -q -f name=^/$(SOLR_CONTAINER_NAME)$$ | wc -l) -eq 0 ]; then \
@@ -46,31 +48,47 @@ run-container:
 	done
 	@echo "Solr server is ready!"
 
-create-collection:
-	@echo "Checking if collection '$(COLLECTION_NAME)' exists..."
-	@if docker exec $(SOLR_CONTAINER_NAME) solr status | grep -q "$(COLLECTION_NAME)"; then \
-		echo "Collection '$(COLLECTION_NAME)' already exists."; \
+create-collections:
+	@echo "Checking collection '$(COLLECTION_SIMPLE)'..."
+	@if docker exec $(SOLR_CONTAINER_NAME) solr status | grep -q "$(COLLECTION_SIMPLE)"; then \
+		echo "Collection '$(COLLECTION_SIMPLE)' already exists."; \
 	else \
-		echo "Creating collection '$(COLLECTION_NAME)'..."; \
-		docker exec -i $(SOLR_CONTAINER_NAME) solr create -c $(COLLECTION_NAME); \
+		echo "Creating collection '$(COLLECTION_SIMPLE)'..."; \
+		docker exec -i $(SOLR_CONTAINER_NAME) solr create -c $(COLLECTION_SIMPLE); \
+	fi
+	@echo "Checking collection '$(COLLECTION_ADVANCED)'..."
+	@if docker exec $(SOLR_CONTAINER_NAME) solr status | grep -q "$(COLLECTION_ADVANCED)"; then \
+		echo "Collection '$(COLLECTION_ADVANCED)' already exists."; \
+	else \
+		echo "Creating collection '$(COLLECTION_ADVANCED)'..."; \
+		docker exec -i $(SOLR_CONTAINER_NAME) solr create -c $(COLLECTION_ADVANCED); \
 	fi
 
-configure-schema:
-	@echo "Applying custom schema from $(SCHEMA_FILE)..."
+configure-schemas:
+	@echo "Applying schema from $(SCHEMA_SIMPLE) to $(COLLECTION_SIMPLE)..."
 	curl -X POST -H 'Content-type:application/json' \
-		--data-binary "@$(SCHEMA_FILE)" \
-		"http://localhost:$(SOLR_PORT)/solr/$(COLLECTION_NAME)/schema"
-	@echo "\nSchema configured successfully!"
+		--data-binary "@$(SCHEMA_SIMPLE)" \
+		"http://localhost:$(SOLR_PORT)/solr/$(COLLECTION_SIMPLE)/schema"
+	@echo "\nApplying schema from $(SCHEMA_ADVANCED) to $(COLLECTION_ADVANCED)..."
+	curl -X POST -H 'Content-type:application/json' \
+		--data-binary "@$(SCHEMA_ADVANCED)" \
+		"http://localhost:$(SOLR_PORT)/solr/$(COLLECTION_ADVANCED)/schema"
+	@echo "\nAll schemas configured successfully!"
 
-populate-collection:
-	@echo "Copying final_cves.json to container..."
-	docker cp final_cves.json my-solr:/tmp/final_cves.json
-	@echo "Populating collection using Solr JSON update handler..."
-	docker exec my-solr curl -X POST \
-		'http://localhost:8983/solr/cves/update/json/docs?commit=true' \
+populate-collections:
+	@echo "Copying $(JSON_FILE) to container..."
+	docker cp $(JSON_FILE) $(SOLR_CONTAINER_NAME):/tmp/$(JSON_FILE)
+	@echo "Populating collection '$(COLLECTION_SIMPLE)'..."
+	docker exec $(SOLR_CONTAINER_NAME) curl -X POST \
+		'http://localhost:8983/solr/$(COLLECTION_SIMPLE)/update/json/docs?commit=true' \
 		-H 'Content-Type: application/json' \
-		--data-binary @/tmp/final_cves.json
-	@echo "Data populated successfully!"
+		--data-binary @/tmp/$(JSON_FILE)
+	@echo "Populating collection '$(COLLECTION_ADVANCED)'..."
+	docker exec $(SOLR_CONTAINER_NAME) curl -X POST \
+		'http://localhost:8983/solr/$(COLLECTION_ADVANCED)/update/json/docs?commit=true' \
+		-H 'Content-Type: application/json' \
+		--data-binary @/tmp/$(JSON_FILE)
+	@echo "Both collections populated successfully!"
 
 clean-solr:
 	@echo "Removing container '$(SOLR_CONTAINER_NAME)'..."
