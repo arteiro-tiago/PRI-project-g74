@@ -4,14 +4,14 @@
 
 #### Query:
 ```json
-XSS dashboard admin
+XSS dashboard administration panel
 ```
 
 ### 2. Technical advisories detailing remote code execution flaws in open-source web frameworks that do not require user authentication.
 
 #### Query:
 ```json
-remote code execution unauthenticated
+unauthenticated remote code execution framework
 ```
 
 ### 3. Reports explaining privilege escalation methods utilized by remote attackers within Linux kernel environments.

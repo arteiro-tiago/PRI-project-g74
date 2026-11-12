@@ -66,7 +66,7 @@ def main():
 
   rows_to_write = []
   for q_id, unique_doc_ids in pooled_docs.items():
-    for doc_id in unique_doc_ids:
+    for doc_id in sorted(unique_doc_ids):
       rows_to_write.append({
           "query": q_id,
           "iteration": 0,
@@ -81,6 +81,8 @@ def main():
     writer.writeheader()
     for row in rows_to_write:
       writer.writerow(row)
+      
+  print(f"File '{CSV_FILENAME}' generated successfully with sorted CVEs!")
 
 
 if __name__ == "__main__":
