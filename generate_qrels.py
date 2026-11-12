@@ -15,10 +15,7 @@ QUERIES = {
     "1": "XSS dashboard administration panel",
     "2": "unauthenticated remote code execution framework",
     "3": "privilege escalation Linux kernel",
-    "4": (
-        "memory corruption buffer overflow denial of service code execution"
-        " network services protocols"
-    ),
+    "4": "memory corruption buffer overflow denial of service code execution network services protocols"
 }
 
 SETUPS = {
