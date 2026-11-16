@@ -66,15 +66,26 @@ def ghad_cwes(advisory):
     cwes = database_specific.get("cwe_ids", [])
     return cwes if isinstance(cwes, list) else [cwes]
 
+GHAD_SEVERITY_MAP = {"MODERATE": "MEDIUM"}
+
 def ghad_cvss(advisory):
-    cvss = advisory.get("cvss", {})
-    if not isinstance(cvss, dict):
-        return {}
-    return {
-        "score": cvss.get("score"),
-        "vector": cvss.get("vector_string") or cvss.get("vectorString"),
-        "version": cvss.get("version"),
-    }
+    """Extract the CVSS vector and version from the OSV severity list."""
+    for entry in advisory.get("severity") or []:
+        vector = entry.get("score") if isinstance(entry, dict) else None
+        if isinstance(vector, str) and vector.startswith("CVSS:"):
+            return {
+                "score": None,
+                "vector": vector,
+                "version": vector.split("/")[0].removeprefix("CVSS:"),
+            }
+    return {}
+
+def ghad_severity(advisory):
+    severity = (advisory.get("database_specific") or {}).get("severity")
+    if not isinstance(severity, str) or not severity:
+        return None
+    severity = severity.upper()
+    return GHAD_SEVERITY_MAP.get(severity, severity)
 
 def index_ghad_advisories(ghad_path):
     """Index GHAD advisory records by CVE alias."""
@@ -135,18 +146,17 @@ def merge_ghad_advisories(nvd_record, advisories):
     ghad_published = [a.get("published") for a in advisories]
     ghad_modified = [a.get("modified") for a in advisories]
     ghad_cvss_data = next((ghad_cvss(a) for a in advisories if ghad_cvss(a)), {})
-    ghad_severity = next((a.get("severity") for a in advisories if a.get("severity")), None)
+    severity = next((ghad_severity(a) for a in advisories if ghad_severity(a)), None)
 
     if not nvd_record.get("published"):
         nvd_record["published"] = next((value for value in ghad_published if value), "")
     if not nvd_record.get("modified"):
         nvd_record["modified"] = next((value for value in ghad_modified if value), "")
-    if not nvd_record.get("cvss_score") and ghad_cvss_data:
-        nvd_record["cvss_score"] = ghad_cvss_data.get("score")
+    if not nvd_record.get("cvss_vector") and ghad_cvss_data:
         nvd_record["cvss_vector"] = ghad_cvss_data.get("vector")
         nvd_record["cvss_version"] = ghad_cvss_data.get("version")
     if not nvd_record.get("cvss_severity"):
-        nvd_record["cvss_severity"] = ghad_severity or ""
+        nvd_record["cvss_severity"] = severity or ""
 
     return nvd_record
 
