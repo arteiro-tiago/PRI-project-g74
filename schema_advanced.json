@@ -11,7 +11,8 @@
           {"class": "solr.EnglishPossessiveFilterFactory"},
           {"class": "solr.ASCIIFoldingFilterFactory", "preserveOriginal": true},
           {"class": "solr.LowerCaseFilterFactory"},
-          {"class": "solr.StopFilterFactory", "ignoreCase": "true", "words": "stopwords.txt", "format": "wordset"}
+          {"class": "solr.StopFilterFactory", "ignoreCase": "true", "words": "stopwords.txt", "format": "wordset"},
+          {"class": "solr.KStemFilterFactory"}
         ]
       },
       "queryAnalyzer": {
@@ -22,7 +23,8 @@
           {"class": "solr.EnglishPossessiveFilterFactory"},
           {"class": "solr.ASCIIFoldingFilterFactory", "preserveOriginal": true},
           {"class": "solr.LowerCaseFilterFactory"},
-          {"class": "solr.StopFilterFactory", "ignoreCase": "true", "words": "stopwords.txt", "format": "wordset"}
+          {"class": "solr.StopFilterFactory", "ignoreCase": "true", "words": "stopwords.txt", "format": "wordset"},
+          {"class": "solr.KStemFilterFactory"}
         ]
       }
     }
@@ -44,13 +46,6 @@
     {"name": "references", "type": "string", "multiValued": true, "indexed": true, "stored": true},
     {"name": "text_all", "type": "cveText", "multiValued": true, "indexed": true, "stored": false}
   ],
-  "add-copy-field": [
-    {"source": "cve_id", "dest": "text_all"},
-    {"source": "description", "dest": "text_all"},
-    {"source": "summary", "dest": "text_all"},
-    {"source": "affected", "dest": "text_all"},
-    {"source": "cwe", "dest": "text_all"}
-  ],
   "add-dynamic-field": [
     {
       "name": "affected.*",
@@ -59,5 +54,15 @@
       "indexed": true,
       "stored": true
     }
+  ],
+  "add-copy-field": [
+    {"source": "cve_id", "dest": "text_all"},
+    {"source": "description", "dest": "text_all"},
+    {"source": "summary", "dest": "text_all"},
+    {"source": "affected.vendor", "dest": "text_all"},
+    {"source": "affected.product", "dest": "text_all"},
+    {"source": "cwe", "dest": "text_all"},
+    {"source": "affected.vendor", "dest": "affected"},
+    {"source": "affected.product", "dest": "affected"}
   ]
 }

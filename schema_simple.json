@@ -23,5 +23,9 @@
       "indexed": true,
       "stored": true
     }
+  ],
+  "add-copy-field": [
+    {"source": "affected.vendor", "dest": "affected"},
+    {"source": "affected.product", "dest": "affected"}
   ]
 }
