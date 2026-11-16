@@ -44,6 +44,26 @@ Na root do repositório, correr:
 make solr-setup
 ```
 
+## Avaliação
+
+Com o Solr a correr, gerar os rankings das duas setups e o pool para avaliação:
+
+```bash
+venv/bin/python generate_qrels.py
+```
+
+Os rankings ficam em `runs/` e o pool em `qrels_template.csv`. Preencher a coluna
+`relevant` com `1` (relevante) ou `0` (não relevante). Correr de novo o script
+mantém as avaliações já feitas.
+
+Depois de avaliar todos os documentos:
+
+```bash
+venv/bin/python evaluate.py
+```
+
+Mostra P@10, AP e MAP por setup e gera `figures/pr_curves.png`.
+
 ## Outros comandos
 
 Para apenas preparar o ambiente e instalar dependências:
